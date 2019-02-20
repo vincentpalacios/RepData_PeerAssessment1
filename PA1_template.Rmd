@@ -1,25 +1,139 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: 'PA1: "Steps" Analysis Report'
+author: "Vincent Palacios"
+date: "February 20, 2019"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, root.dir = "~/../data/temp")
+library(tidyverse)
+library(lubridate)
+```
 
-## Loading and preprocessing the data
+## Get the data  
+
+```{r retrieval}
+url <- "https://github.com/vincentpalacios/RepData_PeerAssessment1/raw/master/activity.zip"
+download.file(url = url, destfile = "activity.zip")
+unzip(zipfile = "activity.zip")
+```
+
+## Loading and preprocessing the data  
+
+```{r inspection}
+# 1. Load the data (i.e. read.csv())
+mydata <- read.csv("activity.csv")
+
+# 2. Process/transform the data (if necessary) into a format suitable for your
+# analysis
+mydata <- as_tibble(mydata)
+str(mydata)
+names(mydata)
+summary(mydata)
+head(mydata)
+```
+
+## What is mean total number of steps taken per day?  
+
+```{r part_1}
+# 1. Calculate the total number of steps taken per day
+(daily_steps <- mydata %>% group_by(date) %>% summarise(steps_per_day = sum(steps, na.rm = TRUE)))
+
+# 2. If you do not understand the difference between a histogram and a barplot,
+# research the difference between them. Make a histogram of the total number of
+# steps taken each day
+daily_steps %>% 
+  ggplot() +
+  geom_histogram(aes(x = steps_per_day), bins = 40)
+
+# 3. Calculate and report the mean and median of the total number of steps taken
+# per day
+(summary_steps <- daily_steps %>% summarise(mean_steps = mean(steps_per_day, na.rm = TRUE), 
+                                            median_steps = median(steps_per_day, na.rm = TRUE)))
+```
+
+## What is the average daily activity pattern?  
+
+```{r part_2}
+# 1. Make a time series plot (i.e. type="l") of the 5-minute interval (x-axis)
+# and the average number of steps taken, averaged across all days (y-axis)
+(steps <- mydata %>% group_by(interval) %>% summarise(mean_steps = mean(steps, na.rm = TRUE)))
+
+ggplot(steps) +
+  geom_line(aes(x = interval, y = mean_steps))
+
+# 2. Which 5-minute interval, on average across all the days in the dataset,
+# contains the maximum number of steps?
+steps[steps$mean_steps == max(steps$mean_steps), ]
+
+```
+
+## Imputing missing values  
+
+```{r part_3}
+# 1. Calculate and report the total number of missing values in the dataset
+# (i.e. the total number of rows with NAs)
+sum(!complete.cases(mydata))
+
+# 2. Devise a strategy for filling in all of the missing values in the dataset. 
+# The strategy does not need to be sophisticated. For example, you could use the
+# mean/median for that day, or the mean for that 5-minute interval, etc.
+
+# To impute missing values, I will join the mean steps taken for each interval
+# to the original data, and then replace missing values with their interval's
+# mean.
+
+# 3. Create a new dataset that is equal to the original dataset but with the
+# missing data filled in.
+new_data <- mydata %>% left_join(., steps, by = "interval") %>% 
+  mutate(steps = case_when(
+    is.na(steps) ~ mean_steps,
+    TRUE         ~ as.double(steps))) %>% 
+  select(new_steps = steps, date, interval)
+
+# 4. Make a histogram of the total number of steps taken each day and Calculate
+# and report the mean and median total number of steps taken per day. Do these
+# values differ from the estimates from the first part of the assignment? What
+# is the impact of imputing missing data on the estimates of the total daily
+# number of steps?
+new_data %>% group_by(date) %>% summarise(new_steps_per_day = sum(new_steps)) %>% 
+  ggplot() +
+  geom_histogram(aes(x = new_steps_per_day), bins = 40)
+
+new_daily_steps <- new_data %>% group_by(date) %>% 
+  summarise(new_steps_per_day = sum(new_steps, na.rm = TRUE))
+
+(new_summary_steps <- new_daily_steps %>% 
+    summarise(new_mean_steps = mean(new_steps_per_day, na.rm = TRUE), 
+              new_median_steps = median(new_steps_per_day, na.rm = TRUE)))
+# The impact of imputing missing values is an increase in both the mean and 
+# median values of steps per day, and both are equal to eachother.
+```
 
 
+## Are there differences in activity patterns between weekdays and weekends?  
 
-## What is mean total number of steps taken per day?
+```{r part_4}
+# 1. Create a new factor variable in the dataset with two levels – “weekday” and
+# “weekend” indicating whether a given date is a weekday or weekend day.
+new_data <- new_data %>% 
+  mutate(weekday = weekdays(ymd(date)),
+         weekday = case_when(
+           !(weekday  %in% c("Saturday", "Sunday")) ~ "weekday",
+            (weekday  %in% c("Saturday", "Sunday")) ~ "weekend"
+         ))
 
+# 2. Make a panel plot containing a time series plot (i.e.
+# \color{red}{\verb|type = "l"|}type="l") of the 5-minute interval (x-axis) and
+# the average number of steps taken, averaged across all weekday days or weekend
+# days (y-axis). See the README file in the GitHub repository to see an example
+# of what this plot should look like using simulated data.
+new_steps <- new_data %>% group_by(weekday, interval) %>% 
+  summarise(new_mean_steps = mean(new_steps, na.rm = TRUE))
+new_steps %>% 
+  ggplot() +
+  geom_line(aes(x = interval, y = new_mean_steps)) +
+  facet_wrap( ~ weekday)
+```
 
-
-## What is the average daily activity pattern?
-
-
-
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
